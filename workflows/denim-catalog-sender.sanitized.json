@@ -1,0 +1,249 @@
+{
+  "name": "Denim – Catalog Sender",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Denim – Catalog Sender\nCalled by the main agent workflow (no waiting). Sends the catalog **20 images at a time** (1.2 s apart), pauses **15 s** between batches to protect the WhatsApp number, then sends a closing message.\nImages are served from Cloudinary as optimised JPGs (`f_jpg,q_auto,w_1080`).",
+        "height": 200,
+        "width": 560,
+        "color": 4
+      },
+      "id": "7cdadc2e-b8ef-468d-8c55-b1de2d66a513",
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "06b9f7ae-f28d-4e4d-a4c5-f1aa9657b16c",
+      "name": "Catalog Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select product_id, product_name, category, asking_price, bundle_size, stock_status, image_url\nfrom public.products\nwhere is_active and image_url is not null\n  and ($1 = 'all' or category = $1)\norder by catalog_batch, product_id;",
+        "options": {
+          "queryReplacement": "={{ $json.category || 'all' }}"
+        }
+      },
+      "id": "b22ce04b-1519-499f-aafa-a769e3336d22",
+      "name": "Load Catalog",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        220,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const job = $('Catalog Trigger').first().json;\nconst items = $input.all();\nreturn items.map((it, i) => {\n  const p = it.json;\n  const img = String(p.image_url).replace('/image/upload/', '/image/upload/f_jpg,q_auto,w_1080/');\n  const caption = `*${p.product_id}* · ${p.product_name}\\nTK ${p.asking_price}/pc · Bundle ${p.bundle_size} pcs` +\n                  (p.stock_status === 'In Stock' ? '' : ` · ${p.stock_status}`);\n  return { json: { phone: job.phone, phoneNumberId: job.phoneNumberId, graphVersion: job.graphVersion,\n                   productId: p.product_id, image: img, caption, index: i + 1, total: items.length } };\n});"
+      },
+      "id": "5b26621d-9f9e-482b-aa2b-acd6592fc419",
+      "name": "Prepare Images",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 20,
+        "options": {}
+      },
+      "id": "10b25275-f1b9-46c3-8bbc-c53c643a92ae",
+      "name": "Batches of 20",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        660,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $json.graphVersion }}/{{ $json.phoneNumberId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1200
+            }
+          }
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $json.phone, type: 'image', image: { link: $json.image, caption: $json.caption } }) }}"
+      },
+      "id": "61416c71-4d36-4e6c-bdb1-bb69f925825c",
+      "name": "Send Product Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        180
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "amount": 15,
+        "unit": "seconds"
+      },
+      "id": "2317c741-8b81-4b78-ba2b-f8c7e69bcfae",
+      "name": "Pause 15s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        180
+      ],
+      "webhookId": "f3af47f1-d7f6-417c-aae2-6e5157789953"
+    },
+    {
+      "parameters": {
+        "jsCode": "const first = $('Prepare Images').first().json;\nreturn [{ json: { phone: first.phone, phoneNumberId: first.phoneNumberId, graphVersion: first.graphVersion, total: $('Prepare Images').all().length } }];"
+      },
+      "id": "7dafbe08-718a-4f52-a205-0cf42381d999",
+      "name": "One Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        -20
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $json.graphVersion }}/{{ $json.phoneNumberId }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $json.phone, type: 'text', text: { body: `That's all ${$json.total} designs ✅\\n\\nSend me a *screenshot* of any design you like and I'll share the full details — price, bundle size, sizes and stock.` } }) }}"
+      },
+      "id": "99c0b260-700f-4301-b75b-02472db478b8",
+      "name": "Send Closing Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        -20
+      ],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Catalog Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Catalog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Catalog": {
+      "main": [
+        [
+          {
+            "node": "Prepare Images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Images": {
+      "main": [
+        [
+          {
+            "node": "Batches of 20",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Batches of 20": {
+      "main": [
+        [
+          {
+            "node": "One Item",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Product Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Product Image": {
+      "main": [
+        [
+          {
+            "node": "Pause 15s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pause 15s": {
+      "main": [
+        [
+          {
+            "node": "Batches of 20",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "One Item": {
+      "main": [
+        [
+          {
+            "node": "Send Closing Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dhaka",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "active": false,
+  "tags": []
+}

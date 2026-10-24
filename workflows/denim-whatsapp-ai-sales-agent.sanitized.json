@@ -1,0 +1,1446 @@
+{
+  "name": "Denim – WhatsApp AI Sales Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Denim Wholesale – WhatsApp AI Sales Agent\nMeta WhatsApp Cloud API → n8n → OpenAI (gpt-4o-mini) + Supabase (products, chat memory) → Airtable (Sales CRM leads).\n\n**Before activating:**\n1. Fill the **Config** node (Phone Number ID, Airtable IDs).\n2. Select credentials in every node with a ⚠️.\n3. In **Run Catalog Sender**, pick the *Denim – Catalog Sender* workflow.\n4. Meta → WhatsApp → Configuration → Callback URL = this workflow's **Production** webhook URL, Verify token = `REPLACE_WITH_YOUR_PRIVATE_WEBHOOK_VERIFY_TOKEN`, subscribe to **messages**.",
+        "height": 300,
+        "width": 520,
+        "color": 4
+      },
+      "id": "275d87ce-c22c-4820-94f2-d99f5a2f0398",
+      "name": "Note: Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -620,
+        -520
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 1 · Meta webhook verification (GET)\nMeta calls this once when you save the Callback URL. Returns `hub.challenge` if the verify token matches.",
+        "height": 140,
+        "width": 520,
+        "color": 7
+      },
+      "id": "f602ea6b-6aee-4efc-8fc8-4da7ec9cb8f9",
+      "name": "Note: Verify",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -620,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 2 · Incoming messages (POST)\nResponds 200 to Meta immediately, extracts the message, drops status updates and duplicate deliveries, marks it read and shows typing.",
+        "height": 140,
+        "width": 520,
+        "color": 7
+      },
+      "id": "d0e58475-7d94-4502-a392-04698c042bed",
+      "name": "Note: Inbound",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -620,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 3 · AI agent\nText, images (Product ID read by vision) and unsupported types are turned into one `chatInput`. The agent answers with JSON: reply + action + lead.",
+        "height": 140,
+        "width": 560,
+        "color": 7
+      },
+      "id": "af472359-5786-4be3-8398-a75372cec063",
+      "name": "Note: Agent",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1080,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 4 · Actions\nSend the reply · start the catalog sender (20 images, pause, next 20) · upsert the lead in Airtable Sales CRM.",
+        "height": 140,
+        "width": 560,
+        "color": 7
+      },
+      "id": "ffc2bf22-3cab-498b-be6e-fb06c0bfb171",
+      "name": "Note: Actions",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2140,
+        120
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "denim-whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "504a10d6-65f5-441a-b5c4-3aa124fb2a92",
+      "name": "WhatsApp Verify (GET)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        -40
+      ],
+      "webhookId": "69d57fee-32e2-4eee-9756-6a1b02c5e0ea"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "33a4ecf5-a136-4f16-b0a9-30b5ad98e5be",
+              "leftValue": "={{ $json.query['hub.mode'] }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "subscribe"
+            },
+            {
+              "id": "50512d81-0a61-4196-8a4b-7f90d44a04d6",
+              "leftValue": "={{ $json.query['hub.verify_token'] }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "REPLACE_WITH_YOUR_PRIVATE_WEBHOOK_VERIFY_TOKEN"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ccb18644-5e8d-4731-8acf-48f6509a7d9f",
+      "name": "Verify Token OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -380,
+        -40
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "db030aff-6fbf-429c-bbd9-be6813bd0b2d",
+      "name": "Return Challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -160,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Forbidden",
+        "options": {
+          "responseCode": 403
+        }
+      },
+      "id": "32c47079-d230-4e6b-b39b-7887168e9ec8",
+      "name": "Reject",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -160,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "denim-whatsapp",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "07bfc6d1-ed17-48eb-8f9d-f9dfd864edad",
+      "name": "WhatsApp Inbound (POST)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -600,
+        300
+      ],
+      "webhookId": "e4ec43fd-d4df-4c81-b4b1-3e1606f87a46"
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "5065ef4f-88d9-4719-badd-611605bb268b",
+              "name": "PHONE_NUMBER_ID",
+              "value": "YOUR_META_PHONE_NUMBER_ID",
+              "type": "string"
+            },
+            {
+              "id": "b4430652-8a2e-47a4-bed2-bdd4687cdd01",
+              "name": "GRAPH_VERSION",
+              "value": "v25.0",
+              "type": "string"
+            },
+            {
+              "id": "0122a58e-f412-499c-b228-50e740aaa5ea",
+              "name": "AIRTABLE_BASE_ID",
+              "value": "YOUR_AIRTABLE_BASE_ID",
+              "type": "string"
+            },
+            {
+              "id": "2d7e0c21-3717-4901-9dc0-cc40562e5f62",
+              "name": "AIRTABLE_TABLE_ID",
+              "value": "YOUR_AIRTABLE_TABLE_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {},
+        "includeOtherFields": true
+      },
+      "id": "307c61e0-5590-4da0-9ac6-c1fc650c9618",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -380,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pull the first customer message out of Meta's webhook payload.\n// Status updates (sent/delivered/read) have no \"messages\" → stop here.\nconst body = $json.body || {};\nconst value = body.entry?.[0]?.changes?.[0]?.value || {};\nconst msg = value.messages?.[0];\nif (!msg) return [];\n\nconst contact = value.contacts?.[0] || {};\nconst type = msg.type;\nlet text = '';\nlet mediaId = '';\nlet caption = '';\n\nif (type === 'text') text = msg.text?.body || '';\nelse if (type === 'image') { mediaId = msg.image?.id || ''; caption = msg.image?.caption || ''; }\nelse if (type === 'button') text = msg.button?.text || '';\nelse if (type === 'interactive') text = msg.interactive?.button_reply?.title || msg.interactive?.list_reply?.title || '';\n\nconst kind = (type === 'image') ? 'image' : (text ? 'text' : 'unsupported');\n\nreturn [{ json: {\n  phone: msg.from,                       // e.g. 8801XXXXXXXXX\n  phonePlus: '+' + msg.from,\n  name: contact.profile?.name || '',\n  messageId: msg.id,\n  waType: type,\n  kind,\n  text: text.slice(0, 4000),\n  mediaId,\n  caption,\n  timestamp: new Date(Number(msg.timestamp) * 1000).toISOString(),\n}}];"
+      },
+      "id": "32088214-b543-4f5c-8ec6-4b6f57ffa57c",
+      "name": "Extract Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.wa_processed_messages (message_id, wa_from)\nvalues ($1, $2)\non conflict (message_id) do nothing\nreturning message_id;",
+        "options": {
+          "queryReplacement": "={{ $json.messageId }},{{ $json.phone }}"
+        }
+      },
+      "id": "ab0623d4-4f6f-4e91-b6b4-80868b7668da",
+      "name": "Dedupe Message",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        60,
+        300
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "19b726c8-aefa-429f-a91c-29f4aafcab2b",
+              "leftValue": "={{ $json.message_id }}",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5d9583c2-8363-471b-ac9d-4ba74115d2e4",
+      "name": "New Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        280,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $('Config').first().json.GRAPH_VERSION }}/{{ $('Config').first().json.PHONE_NUMBER_ID }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', status: 'read', message_id: $('Extract Message').item.json.messageId, typing_indicator: { type: 'text' } }) }}"
+      },
+      "id": "a02ecf33-5b9d-4fc8-9fbf-7f0ba9b5efdc",
+      "name": "Mark Read + Typing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        500,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "131537fa-26c9-4617-8f02-f617634ac1e6",
+                    "leftValue": "={{ $('Extract Message').item.json.kind }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "text"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Text"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "470e3ca5-f423-4d48-b536-7e3bc9433726",
+                    "leftValue": "={{ $('Extract Message').item.json.kind }}",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "rightValue": "image"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Image"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Other"
+        }
+      },
+      "id": "c7db3852-2a88-4ff7-9c2b-c35c5f0b9d3e",
+      "name": "Message Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        720,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0315d773-57ee-4781-971e-332aae9fede6",
+              "name": "chatInput",
+              "value": "={{ $('Extract Message').item.json.text }}{{ ($('Extract Message').item.json.text.match(/\\b(PD\\d{3}|[A-Z]{2}-DJ-\\d{3})\\b/ig) || []).length ? '\\n\\n[SYSTEM NOTE: The customer mentioned ' + Array.from(new Set($('Extract Message').item.json.text.toUpperCase().match(/\\b(PD\\d{3}|[A-Z]{2}-DJ-\\d{3})\\b/ig))).join(', ') + '. Call get_product for each of these IDs now and use ONLY the returned data (name, price, bundle, sizes, fabric, features, stock). Never reuse details of other products from earlier in the chat.]' : '' }}{{ /discount|reduce|lower|less|cheap|best price|last price|final price|too high|too much|expensive|negotiat|kom|komano|কম/i.test($('Extract Message').item.json.text) ? '\\n\\n[SYSTEM NOTE: The customer is asking for a lower price. You MUST call the request_discount tool now — once for EACH product currently being discussed (all products the customer is considering) — and offer exactly each returned offer_price (call it our final price ONLY if is_final is true; if is_final is false call it a special discounted price and never say final). Ignore any earlier prices you offered in this chat. Do not calculate the price yourself.]' : '' }}{{ /\\b(send|show|share|see|view|look at|check out|browse|display)\\b[\\s\\S]*\\b(catalog|catalogue|pictures?|photos?|images?|pics?|designs?|collection|products?|items?|samples?|jeans)\\b|\\b(catalog|catalogue)\\b/i.test($('Extract Message').item.json.text) ? '\\n\\n[SYSTEM NOTE: The customer is asking to SEE the catalog/pictures. Set action \"send_catalog\" (catalog_category = the category they named, otherwise \"all\") and tell them the pictures come in batches of 20.]' : '\\n\\n[SYSTEM NOTE: The customer did NOT ask to see pictures in this message. Set action \"none\". Do not send the catalog and do not ask whether they want to see it — just answer what they asked.]' }}{{ /^\\s*(hi+|hello+|hey+|hlw|helo|salam|assalamu?\\s*alaikum|as-?salamu? ?alaikum|good (morning|afternoon|evening)|greetings)[\\s!.,?]*(there|sir|bhai|brother)?[\\s!.,?]*$/i.test($('Extract Message').item.json.text) ? '\\n\\n[SYSTEM NOTE: This message is only a greeting. Reply with a short greeting (2–3 lines): welcome them, say who you are in one line, and ask what kind of business they run. Do NOT list categories, design counts, prices or the catalog.]' : '' }}{{ /\\b(take|order|buy|confirm|bundles?|total|proceed|book|invoice|summary)\\b/i.test($('Extract Message').item.json.text) ? '\\n\\n[SYSTEM NOTE: If the customer is confirming an order or any total/summary is needed, call calculate_order with the Product IDs and bundle quantities and copy every number (pieces, price per piece, line totals, total_bundles, order_total) exactly from the tool result. Never add up numbers yourself.]' : '' }}{{ /\\b(take|order|buy|confirm(ed)?|ok(ay)?|yes|done|proceed|deal|book)\\b/i.test($('Extract Message').item.json.text) ? '\\n\\n[SYSTEM NOTE: If the customer is confirming an order: before saying the sales team will contact them, make sure you have ALL of: 1) name, 2) shop/business name, 3) business type, 4) city, 5) full delivery address, 6) payment method (Bank transfer, bKash, Nagad or Cash at factory), 7) required delivery date. Ask for every missing item in ONE message as a numbered list. Only when all 7 are known: summarise the order with calculate_order, set lead_status \"Qualified – Ready for Sales\" and say a sales representative will contact them.]' : '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "2469abfe-10b2-4af7-89b4-764fcabe0d56",
+      "name": "Text Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        960,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://graph.facebook.com/{{ $('Config').first().json.GRAPH_VERSION }}/{{ $('Extract Message').item.json.mediaId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fc30fe3a-7afc-4009-90dd-cf22de8ac8e4",
+      "name": "Get Media URL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "6cf170dc-aab5-4c26-b79f-975116f4f87c",
+      "name": "Download Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1160,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "text": "This picture was sent on WhatsApp by a buyer of a denim jeans wholesaler. Our catalog images have the Product ID printed on them (formats like PD011, PD045, PD120, AM-DJ-001, AF-DJ-002, KB-DJ-001, KG-DJ-002) and often the segment and wholesale price.\nReply in this exact format and nothing else:\nPRODUCT_ID: <the ID exactly as printed, or NONE>\nOUR_CATALOG: <YES if it looks like one of our catalog cards with an info panel, otherwise NO>\nDESCRIPTION: <one short line: garment type, fit, color/wash, notable details>",
+        "inputType": "base64",
+        "binaryPropertyName": "data",
+        "options": {
+          "detail": "high",
+          "maxTokens": 150
+        }
+      },
+      "id": "39dc0db1-d73d-416f-b777-4c61079bac1f",
+      "name": "Read Product ID (Vision)",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1360,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4ded499e-3d4f-4095-970b-97f532580f02",
+              "name": "chatInput",
+              "value": "=[IMAGE] The customer sent a picture.\nAutomatic image reading: {{ $('Read Product ID (Vision)').item.json.content || JSON.stringify($('Read Product ID (Vision)').item.json) }}\nCustomer caption: {{ $('Extract Message').item.json.caption || '(none)' }}\n{{ $json.product_id ? '[PRODUCT DATA from our database for ' + $json.product_id + ' — reply with exactly these values (Product ID, name, price per piece, bundle size, bundle price, sizes and assortment, fabric, key features, stock, dispatch time). Never change or estimate any price: ' + JSON.stringify($json) + ']' : '[SYSTEM NOTE: No Product ID from our catalog could be read on this picture. Do NOT guess any product or price. Ask the customer to send the screenshot again with the Product ID visible, or to type the Product ID.]' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1162acc4-7816-4ab3-9bf9-1657d8b2316d",
+      "name": "Image Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1560,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "76d79f79-8e6e-42ab-adcd-457b096c3b51",
+              "name": "chatInput",
+              "value": "=[UNSUPPORTED] The customer sent a message of type '{{ $('Extract Message').item.json.waType }}', which cannot be read.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d91d0368-8539-4444-befc-2e4bec95ac53",
+      "name": "Unsupported Input",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        960,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "options": {
+          "systemMessage": "=You are \"Denim Assistant\", the WhatsApp sales assistant of **Demo Denim Wholesale Ltd.**, a denim jeans manufacturer and wholesaler in Keraniganj, Dhaka, Bangladesh. You chat with business buyers (shop owners, wholesalers, online sellers, boutiques). A human sales team takes over once an order is ready.\n\n# LANGUAGE & STYLE\n- Always reply in clear, friendly, professional **English**, even if the customer writes in Bangla or another language.\n- This is WhatsApp: keep replies short (usually 2–6 lines, max ~900 characters). Use *single asterisks* for bold, simple line breaks and \"•\" bullets. No markdown headings, tables or code blocks.\n- Ask at most 1–2 questions per message. Never sound robotic or pushy.\n- All prices are in Bangladeshi Taka, written like \"TK 720\". Never use USD or any other currency.\n\n# BUSINESS FACTS (use these; never invent other policies)\n- Products: denim jeans only — 120 designs in 4 categories (no shirts or other garments):\n  • Adult Male — 36 designs, TK 650–800 per piece\n  • Adult Female — 36 designs, TK 620–790 per piece\n  • Kids Boy — 24 designs, TK 450–580 per piece\n  • Kids Girl — 24 designs, TK 420–600 per piece\n  When asked what we sell / which categories, list these 4 categories with design counts and price ranges and STOP there — do not ask whether they want to see the catalog and do not send it (action stays \"none\").\n  Example — customer: \"What do you sell?\" → reply: the 4 categories with counts and prices, nothing else, action \"none\".\n  Each customer message ends with a [SYSTEM NOTE] from the system that tells you whether the customer asked for the catalog — always follow it.\n- WHOLESALE ONLY. We do not sell single pieces or retail quantities.\n- MOQ: 1 bundle per design. Bundle size depends on the design (16–32 pcs). Designs can be mixed; each design is ordered in full bundles. Each bundle comes in a fixed size assortment (see product data). Custom size ratios possible for 5+ bundles of one design (sales team confirms).\n- Minimum order value: TK 30,000 per order.\n- Prices are per piece, wholesale, ex-factory Dhaka. Bundle price = price per piece × bundle size.\n- Payment: bank transfer, bKash/Nagad merchant, or cash at the factory. 50% advance, balance before dispatch. No credit, no cash-on-delivery for new buyers.\n- Dispatch: in-stock items in 2–3 days; \"Made to Order\" items in 15–20 days. Delivery all over Bangladesh by courier/transport (1–3 days), freight paid by the buyer. Currently we deliver within Bangladesh only.\n- Samples: paid samples (1 pc per design), cost adjusted against the bulk order.\n- Private label / custom wash: possible for 10+ bundles per design, 20–30 days — the sales team handles it.\n- Defects: report within 7 days with photos → replaced or credited. No change-of-mind returns.\n- Sales team hours: Saturday–Thursday, 10:00–19:00 (Bangladesh time). You (the assistant) reply 24/7.\n\n# GREETING (first message or a plain \"hi/hello\")\n- Never answer with a generic \"How can I help you?\". Greet by WhatsApp name if known, introduce yourself as the assistant of Demo Denim Wholesale Ltd. (denim jeans wholesale, Keraniganj, Dhaka — 120 designs for men, women, boys and girls), and ask ONE question: what kind of business they run (shop, wholesaler, online seller…). Keep it to 2–3 lines. Do NOT list the categories, design counts, prices or the catalog in the greeting — share those only when the customer asks.\n- If the conversation history shows you already greeted them, don't repeat the introduction — say welcome back and offer the catalog or ask what they are looking for.\n\n# TOOLS\n- `get_product` — full details of ONE product by Product ID (e.g. PD045, AM-DJ-001). Returns asking_price, first_offer, final_price (= lowest_price), bundle_size, bundle_price, sizes, size_assortment, fabric, fit, color, key_features, stock_status, dispatch_time.\n- `request_discount` — records a discount request for ONE product and returns the exact price to offer (see BARGAINING RULES).\n- `calculate_order` — exact order calculation from the database (pieces, agreed price per piece, line totals, total bundles, order total). Use it for EVERY total or order summary.\n- `search_products` — find products by category, one keyword (color/fit/style, e.g. \"black\", \"cargo\", \"flare\") and/or max price per piece.\nAlways use a tool before stating any product detail or price. Never guess or invent products, prices or stock.\n\n# CATALOG\n- Set \"action\": \"send_catalog\" ONLY when the customer explicitly asks in their latest message to see/send the catalog, pictures or designs. Never send it on your own initiative, never as a follow-up to listing categories, and never because you think they might like it. When they ask, set \"action\": \"send_catalog\" and \"catalog_category\" to \"all\" or one segment (\"Adult Male\", \"Adult Female\", \"Kids Boy\", \"Kids Girl\").\n- In \"reply\", tell them the pictures are coming in batches of 20 with a short pause between batches, and ask them to send a screenshot of any design they like. The pictures are sent automatically by the system after your reply — do not list products yourself.\n- Do not trigger the catalog again if it was already sent in this conversation, unless the customer asks for it again.\n\n# IMAGES FROM THE CUSTOMER\n- A message starting with \"[IMAGE]\" means the customer sent a picture; it includes an automatic analysis with any Product ID found on it.\n- If a Product ID was detected, call `get_product` and reply with the product details.\n- If no ID was detected, say you could not read the Product ID and ask them to send the screenshot again with the ID visible, or describe the design. If it looks like a photo from elsewhere (not our catalog), say so politely and offer similar designs via `search_products`.\n- A message starting with \"[UNSUPPORTED]\" (voice note, video, sticker, document, location…) → kindly ask the customer to type their message.\n\n# PRODUCT DETAILS FORMAT\nWhen sharing a product, include: Product ID and name, *price per piece*, bundle size and bundle price, sizes and size assortment, fabric, key features, stock status and dispatch time. Never show the lowest price.\n\n# BARGAINING RULES (strict)\n- Discounts are decided by the `request_discount` tool, never by you. Every time the customer asks for a discount / lower price / \"reduce more\" on a product, call `request_discount` with that Product ID (exactly once per product per customer request). If the request is about several products (e.g. \"reduce the price for all of these\"), call it once for EACH of those products and list every product with its offer_price and offer exactly the returned `offer_price` per piece.\n- If `is_final` is true, say clearly that this is our *final price* and that we cannot go lower.\n- Never calculate a discount yourself and never mention prices lower than the tool's offer_price. Never reveal lowest_price / final_price from `get_product` before the tool returns it.\n- If the customer proposes a specific price: ≥ the lowest_price from `get_product` → accept it warmly; below it → call `request_discount` and offer its offer_price.\n- For 10+ bundles of one design, you may say the sales team can review a special quote, but you still never go below the tool's price.\n- Remember the price you agreed for each product and use it in totals.\n- Order totals: always call `calculate_order` and copy its numbers exactly (show each line as bundles × bundle size = pieces × price = line total, then the order_total). Never add or multiply numbers yourself. Write amounts like TK 114,880.\n\n# RETAIL REQUESTS\nIf someone wants 1–2 pieces / less than one bundle / personal use: politely explain we are wholesale-only (minimum 1 bundle per design), thank them, and do not continue a retail order. Set lead_status \"Retail-Declined\" and retail_request true.\n\n# LEAD QUALIFICATION (natural, not an interrogation)\nOver the conversation, learn: customer name, business name, business type (Retailer (shop), Wholesaler, Online Seller, Boutique, Distributor, Other), city, which products and how many bundles, delivery address, payment preference (Bank transfer, bKash, Nagad, Cash at factory) and required delivery date.\nWhen the customer confirms the items and quantities, ask (in ONE message, numbered) for every detail you do not have yet: name, shop/business name, business type, city, full delivery address, payment method and required delivery date. Never tell them the sales team will contact them before all of these are known. When ALL are known → set lead_status \"Qualified – Ready for Sales\", summarise the order and tell them a sales representative will contact them during business hours with the invoice and payment details.\nUse \"Handed Over\" ONLY when the customer explicitly asks for a human, a sales person or a phone call → collect any missing contact details, set lead_status \"Handed Over\" and confirm the sales team will contact them. A confirmed order with complete details is \"Qualified – Ready for Sales\", not \"Handed Over\".\n\nlead_status values (use exactly): \"New\", \"Browsing Catalog\", \"Negotiating\", \"Collecting Details\", \"Qualified – Ready for Sales\", \"Handed Over\", \"Retail-Declined\", \"Not Interested\".\nlead_score: 1 = retail/no intent, 2 = browsing, 3 = negotiating, 4 = items + price agreed, 5 = qualified with full details.\n\n# OUTPUT FORMAT (mandatory)\nRespond with ONE valid JSON object only — no text before or after it, no code fences:\n{\n  \"reply\": \"the WhatsApp message to send to the customer\",\n  \"action\": \"none\" or \"send_catalog\",\n  \"catalog_category\": \"all\" | \"Adult Male\" | \"Adult Female\" | \"Kids Boy\" | \"Kids Girl\",\n  \"lead\": null or {\n    \"customer_name\": \"\", \"business_name\": \"\", \"business_type\": \"\", \"city\": \"\", \"country\": \"Bangladesh\",\n    \"interested_product_ids\": \"PD021, PD045\",\n    \"order_items\": \"PD021 × 2 bundles @ TK 680; PD045 × 1 bundle @ TK 720\",\n    \"total_bundles\": 0, \"estimated_order_value\": 0,   (copy total_bundles and order_total from calculate_order)\n    \"payment_preference\": \"\", \"delivery_address\": \"\", \"required_by\": \"YYYY-MM-DD or empty\",\n    \"lead_status\": \"\", \"lead_score\": 1, \"retail_request\": false,\n    \"conversation_summary\": \"1–2 sentences: what the customer wants and where the deal stands\"\n  }\n}\n\"interested_product_ids\" = ALL Product IDs the customer asked about in the whole conversation (cumulative, comma-separated). \"order_items\" = only items the customer has confirmed they want to order.\nRules for \"lead\": include it whenever you learn something new about the customer or the deal, or the lead_status changes; otherwise null. Always include everything known so far (cumulative), leave unknown text fields as \"\" and unknown numbers as 0. Never invent details the customer did not give.\n\n\n# CONTEXT\nCustomer WhatsApp name: {{ $('Extract Message').item.json.name || 'unknown' }}\nCurrent date/time (Asia/Dhaka): {{ $now.setZone('Asia/Dhaka').toFormat('yyyy-MM-dd HH:mm, cccc') }}",
+          "maxIterations": 8
+        }
+      },
+      "id": "dd0a861e-645f-4f44-a119-40c7ac10f8be",
+      "name": "Denim Sales Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1860,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.3,
+          "responseFormat": "json_object"
+        }
+      },
+      "id": "111f502c-588c-458f-87a3-67909639f719",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1700,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Extract Message').item.json.phone }}",
+        "tableName": "n8n_chat_histories",
+        "contextWindowLength": 20
+      },
+      "id": "147ee1d6-7ae0-44dd-87af-07d5cb62e833",
+      "name": "Chat Memory (Supabase)",
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        1860,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Get full details of ONE product by its Product ID (e.g. PD045, PD120, AM-DJ-001, KG-DJ-002). Returns price per piece, lowest price (bargaining floor, never reveal first), bundle size, bundle price, sizes, size assortment, fabric, fit, color, key features, stock status and dispatch time.",
+        "operation": "executeQuery",
+        "query": "select product_id, product_name, category, asking_price, asking_price - 10 as first_offer, lowest_price as final_price, lowest_price, bundle_size, bundle_price,\n       moq_bundles, fit, color, fabric, key_features, sizes, size_assortment,\n       stock_status, stock_bundles, dispatch_time, full_details\nfrom public.products\nwhere is_active and upper(product_id) = upper(trim($1))\nlimit 1;",
+        "options": {
+          "queryReplacement": "={{ $fromAI('product_id', 'Product ID exactly as printed, e.g. PD045 or AM-DJ-001', 'string') }}"
+        }
+      },
+      "id": "2d9ce743-79bd-439d-a11a-5b5ba8dd07c6",
+      "name": "get_product",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.5,
+      "position": [
+        2020,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Search active products. Inputs: category ('any' or exactly one of Adult Male, Adult Female, Kids Boy, Kids Girl), keyword ('any' or ONE word such as black, cargo, flare, embroidery, stretch) and max_price (price per piece in TK, 0 = no limit). Returns up to 15 matches with ID, name, price, bundle size and stock status, cheapest first.",
+        "operation": "executeQuery",
+        "query": "select product_id, product_name, category, asking_price, bundle_size, stock_status\nfrom public.products\nwhere is_active\n  and ($1 = 'any' or category = $1)\n  and ($2 = 'any' or search_keywords ilike '%' || $2 || '%' or product_name ilike '%' || $2 || '%')\n  and ($3::int = 0 or asking_price <= $3::int)\norder by asking_price, product_id\nlimit 15;",
+        "options": {
+          "queryReplacement": "={{ $fromAI('category', 'any, or one of: Adult Male, Adult Female, Kids Boy, Kids Girl', 'string', 'any') || 'any' }},{{ String($fromAI('keyword', 'any, or ONE keyword such as black or cargo (no commas)', 'string', 'any') || 'any').replace(/,/g, ' ') }},{{ Number($fromAI('max_price', 'Max price per piece in TK, 0 for no limit', 'number', 0)) || 0 }}"
+        }
+      },
+      "id": "2a2384e8-9358-438d-8f32-fe8502e39c3d",
+      "name": "search_products",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.5,
+      "position": [
+        2180,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Catalog is only sent when the customer's own message asks for pictures/catalog.\n// Turn the agent's JSON answer into fields. If the model ever returns plain text, send it as the reply.\nconst raw = String($json.output ?? '').trim();\nlet data = null;\ntry {\n  const cleaned = raw.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();\n  const start = cleaned.indexOf('{'), end = cleaned.lastIndexOf('}');\n  data = JSON.parse(start >= 0 ? cleaned.slice(start, end + 1) : cleaned);\n} catch (e) { data = null; }\n\nconst msg = $('Extract Message').item.json;\nconst validCats = ['all', 'Adult Male', 'Adult Female', 'Kids Boy', 'Kids Girl'];\nlet reply = (data && typeof data.reply === 'string' && data.reply.trim())\n  ? data.reply.trim()\n  : (raw || 'Thank you for your message! Could you please tell me a little more about what you are looking for?');\n\n// Never close an order before the customer's details are collected.\nconst REQUIRED = [['customer_name', 'Your name'], ['business_name', 'Shop / business name'], ['business_type', 'Business type (shop, wholesaler, online seller…)'],\n  ['city', 'City'], ['delivery_address', 'Full delivery address'], ['payment_preference', 'Payment method (Bank transfer, bKash, Nagad or Cash at factory)'],\n  ['required_by', 'Required delivery date']];\nlet lead = (data && data.lead && typeof data.lead === 'object') ? data.lead : null;\nif (lead && String(lead.order_items || '').trim()) {\n  const missing = REQUIRED.filter(([k]) => !String(lead[k] ?? '').trim());\n  const closing = /sales (team|representative|rep)|invoice|will contact you/i.test(reply) || /Qualified|Handed Over/.test(lead.lead_status || '');\n  if (missing.length && closing) {\n    if (!/please (share|provide)|following details|your name|shop ?\\/ ?business name/i.test(reply)) reply += '\\n\\nTo prepare your invoice, please share:\\n' + missing.map((m, i) => (i + 1) + '. ' + m[1]).join('\\n');\n    if (/Qualified/.test(lead.lead_status || '')) { lead.lead_status = 'Collecting Details'; lead.lead_score = Math.min(Number(lead.lead_score) || 4, 4); }\n  }\n}\n\nreturn [{ json: {\n  phone: msg.phone,\n  phonePlus: msg.phonePlus,\n  whatsappName: msg.name,\n  reply: reply.slice(0, 4000),\n  action: (data?.action === 'send_catalog' && /\\b(send|show|share|see|view|look at|check out|browse|display)\\b[\\s\\S]*\\b(catalog|catalogue|pictures?|photos?|images?|pics?|designs?|collection|products?|items?|samples?|jeans)\\b|\\b(catalog|catalogue)\\b/i.test(msg.text || '')) ? 'send_catalog' : 'none',\n  catalogCategory: validCats.includes(data?.catalog_category) ? data.catalog_category : 'all',\n  lead,\n  parsedOk: !!data,\n}}];"
+      },
+      "id": "267fa280-c6b8-4aaf-b338-cbe60742848a",
+      "name": "Parse Agent Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "09b06e47-ed4a-47c6-b3b6-f865e8ba8724",
+              "name": "phone",
+              "value": "={{ $('Extract Message').item.json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "bf6c1bc9-5cb5-4887-896e-b1782405af0e",
+              "name": "reply",
+              "value": "Sorry, I'm having a small technical issue right now. Please send your message again in a minute, or our sales team will get back to you shortly.",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a4a12a20-3305-4deb-a102-21614f44073f",
+      "name": "Fallback Reply",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2200,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $('Config').first().json.GRAPH_VERSION }}/{{ $('Config').first().json.PHONE_NUMBER_ID }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $json.phone, type: 'text', text: { preview_url: false, body: $json.reply } }) }}"
+      },
+      "id": "fc3c8d00-ef31-481d-bdec-b6cec7c8af34",
+      "name": "Send WhatsApp Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2460,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://graph.facebook.com/{{ $('Config').first().json.GRAPH_VERSION }}/{{ $('Config').first().json.PHONE_NUMBER_ID }}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: $json.phone, type: 'text', text: { preview_url: false, body: $json.reply } }) }}"
+      },
+      "id": "3f1cff8f-ec1b-429e-955c-b59ca0abefab",
+      "name": "Send Fallback Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2460,
+        520
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "e7116dec-bf3f-496d-b41e-e64270927107",
+              "leftValue": "={{ $('Parse Agent Output').item.json.action }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "rightValue": "send_catalog"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e0204798-6606-4680-9471-973edc9e0586",
+      "name": "Send Catalog?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2700,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "4cabafb0-2979-4141-8cf0-d60924896a80",
+              "name": "phone",
+              "value": "={{ $('Parse Agent Output').item.json.phone }}",
+              "type": "string"
+            },
+            {
+              "id": "077ac175-d28e-49ce-bcec-2a40c2a24ace",
+              "name": "category",
+              "value": "={{ $('Parse Agent Output').item.json.catalogCategory }}",
+              "type": "string"
+            },
+            {
+              "id": "d1908849-c716-4898-bcff-b291a3e98a7c",
+              "name": "phoneNumberId",
+              "value": "={{ $('Config').first().json.PHONE_NUMBER_ID }}",
+              "type": "string"
+            },
+            {
+              "id": "6c25cfac-a99c-4677-8104-f85ddb5b64bc",
+              "name": "graphVersion",
+              "value": "={{ $('Config').first().json.GRAPH_VERSION }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b50ebcf7-c83c-4cd1-9436-daf9c6dc52b8",
+      "name": "Catalog Job",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2920,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "",
+          "mode": "list"
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "2a0a9365-def5-4766-b189-9e886fb7d212",
+      "name": "Run Catalog Sender",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        3140,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "02fbffd7-e2be-47d3-9459-e20c0d7bd797",
+              "leftValue": "={{ $json.lead }}",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              },
+              "rightValue": ""
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3da75bcb-c9b9-4107-8962-960aa98e4507",
+      "name": "Lead Update?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2460,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Map the agent's lead object to the Airtable \"Leads\" fields (exact column names).\n// The lead is found by 'Lead ID' (WA-<phone>) and then updated, or created if new.\nconst p = $json; const L = p.lead || {};\nconst STATUSES = ['New','Browsing Catalog','Negotiating','Collecting Details','Qualified – Ready for Sales','Handed Over','Retail-Declined','Not Interested'];\nconst txt = v => (v === undefined || v === null) ? '' : String(v).trim();\nconst num = v => { const n = Number(String(v ?? '').replace(/[^0-9.]/g, '')); return Number.isFinite(n) ? n : 0; };\n\nconst leadId = 'WA-' + p.phone;\nconst fields = {\n  'Lead ID': leadId,\n  'WhatsApp Number': p.phonePlus,\n  'Last Contact': new Date().toISOString(),\n};\nconst put = (k, v) => { if (v !== '' && v !== 0 && v !== null && v !== undefined) fields[k] = v; };\n\nput('Customer Name', txt(L.customer_name) || txt(p.whatsappName));\nput('Business Name', txt(L.business_name));\nconst BT = ['Retailer (shop)','Wholesaler','Online Seller','Boutique','Distributor','Other'];\nconst bt = txt(L.business_type);\nput('Business Type', BT.find(o => o.toLowerCase() === bt.toLowerCase())\n  || (/retail|shop|store/i.test(bt) ? 'Retailer (shop)' : /wholesal/i.test(bt) ? 'Wholesaler'\n  : /online|facebook|f-commerce|e-?commerce/i.test(bt) ? 'Online Seller' : /boutique/i.test(bt) ? 'Boutique'\n  : /distribut/i.test(bt) ? 'Distributor' : bt ? 'Other' : ''));\nput('Country', txt(L.country) || 'Bangladesh');\nput('City', txt(L.city));\nput('Interested Product IDs', txt(L.interested_product_ids));\nput('Order Items (ID × bundles @ agreed price)', txt(L.order_items));\nput('Total Bundles', num(L.total_bundles));\nput('Estimated Order Value (TK)', num(L.estimated_order_value));\nput('Payment Preference', txt(L.payment_preference));\nput('Delivery Address', txt(L.delivery_address));\nif (/^\\d{4}-\\d{2}-\\d{2}$/.test(txt(L.required_by))) fields['Required By'] = txt(L.required_by);\nif (STATUSES.includes(txt(L.lead_status))) fields['Lead Status'] = txt(L.lead_status);\nconst score = Math.round(num(L.lead_score)); if (score >= 1 && score <= 5) fields['Lead Score (1–5)'] = score;\nif (L.retail_request === true || L.retail_request === 'true') fields['Retail Request?'] = true;\nput('Conversation Summary', txt(L.conversation_summary));\n\nreturn [{ json: { leadId, fields } }];"
+      },
+      "id": "25fdba15-7592-42a1-b08f-928f32e1e593",
+      "name": "Build Airtable Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2700,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.airtable.com/v0/{{ $('Config').first().json.AIRTABLE_BASE_ID }}/{{ $('Config').first().json.AIRTABLE_TABLE_ID }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {},
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "filterByFormula",
+              "value": "={Lead ID}='{{ $json.leadId }}'"
+            },
+            {
+              "name": "maxRecords",
+              "value": "1"
+            }
+          ]
+        }
+      },
+      "id": "6396ab6b-6a76-4bd6-9e50-2b590f7d9011",
+      "name": "Find Lead (Airtable)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2920,
+        360
+      ],
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "63470013-3b71-4458-b9ff-e398812810a3",
+              "leftValue": "={{ ($json.records || []).length }}",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "rightValue": 0
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3f7e03f8-ee5d-464d-930c-da2a174223ee",
+      "name": "Lead Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3140,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.airtable.com/v0/{{ $('Config').first().json.AIRTABLE_BASE_ID }}/{{ $('Config').first().json.AIRTABLE_TABLE_ID }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ typecast: true, records: [{ id: $json.id, fields: $json.fields }] }) }}"
+      },
+      "id": "970e1c08-39f8-437e-82ba-834715a043a9",
+      "name": "Update Lead (Airtable)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3580,
+        260
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.airtable.com/v0/{{ $('Config').first().json.AIRTABLE_BASE_ID }}/{{ $('Config').first().json.AIRTABLE_TABLE_ID }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "airtableTokenApi",
+        "options": {},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ typecast: true, records: [{ fields: Object.assign({}, $('Build Airtable Fields').item.json.fields, { 'First Contact': new Date().toISOString(), 'Lead Status': $('Build Airtable Fields').item.json.fields['Lead Status'] || 'New' }) }] }) }}"
+      },
+      "id": "5e310380-0b1d-4867-9291-6f2cf5718e33",
+      "name": "Create Lead (Airtable)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3360,
+        460
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge the new lead data with the record already in Airtable:\n// keep every product the customer asked about, never downgrade a qualified lead, keep the highest score.\nconst rec = $json.records[0];\nconst old = rec.fields || {};\nconst f = { ...$('Build Airtable Fields').item.json.fields };\nconst ids = s => String(s || '').split(/[,;\\s]+/).map(x => x.trim().toUpperCase()).filter(Boolean);\nconst all = [...new Set([...ids(old['Interested Product IDs']), ...ids(f['Interested Product IDs'])])];\nif (all.length) f['Interested Product IDs'] = all.join(', ');\nconst rank = { 'New': 1, 'Browsing Catalog': 2, 'Negotiating': 3, 'Collecting Details': 3, 'Qualified – Ready for Sales': 4, 'Handed Over': 5 };\nconst o = old['Lead Status'], n = f['Lead Status'];\nif (n && rank[n] && rank[o] && rank[n] < rank[o]) f['Lead Status'] = o;          // no downgrade\nconst os = Number(old['Lead Score (1–5)'] || 0), ns = Number(f['Lead Score (1–5)'] || 0);\nif (os > ns) f['Lead Score (1–5)'] = os;\nif (old['Retail Request?'] === true) delete f['Retail Request?'];\nif (['Qualified – Ready for Sales', 'Handed Over'].includes(f['Lead Status'])) f['Retail Request?'] = false;  // a qualified wholesale lead is no longer a retail request\nreturn [{ json: { id: rec.id, fields: f } }];"
+      },
+      "id": "35aff7c8-1a82-4114-8a14-80a4bd777e31",
+      "name": "Merge Lead Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Call this EVERY time the customer asks for a discount / lower price on ONE product (once per customer request). It records the request and returns offer_price — the exact price per piece to offer now — and is_final (true = this is our final price, say so clearly). Never calculate discounts yourself.",
+        "operation": "executeQuery",
+        "query": "with p as (\n  select product_id, asking_price, lowest_price from public.products\n  where is_active and upper(product_id) = upper(trim($2)) limit 1\n), up as (\n  insert into public.wa_price_offers (phone, product_id, stage)\n  select $1, product_id, 1 from p\n  on conflict (phone, product_id)\n  do update set stage = least(public.wa_price_offers.stage + 1, 2), updated_at = now()\n  returning stage\n)\nselect p.product_id, p.asking_price, up.stage,\n       case when up.stage = 1 then p.asking_price - 10 else p.lowest_price end as offer_price,\n       (up.stage >= 2) as is_final\nfrom p, up;",
+        "options": {
+          "queryReplacement": "={{ $('Extract Message').first().json.phone }},{{ $fromAI('product_id', 'Product ID the customer wants a discount on, e.g. PD050', 'string') }}"
+        }
+      },
+      "id": "29adc59b-7fed-4ded-8d5f-506ad9b5269f",
+      "name": "request_discount",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.5,
+      "position": [
+        2340,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select product_id, product_name, category, asking_price, bundle_size, bundle_price, sizes, size_assortment,\n       fabric, fit, color, key_features, stock_status, stock_bundles, dispatch_time\nfrom public.products\nwhere is_active and upper(product_id) = upper($1)\nlimit 1;",
+        "options": {
+          "queryReplacement": "={{ (JSON.stringify($json).match(/\\b(PD\\d{3}|[A-Z]{2}-DJ-\\d{3})\\b/i) || ['NONE'])[0] }}"
+        }
+      },
+      "id": "4da969b9-3bc9-4439-b2fb-287b33962f55",
+      "name": "Lookup Screenshot Product",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1460,
+        500
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Calculate an order exactly. Call it whenever you show an order total or summary. Inputs: product_ids (space-separated, e.g. 'AM-DJ-005 PD045') and bundles (space-separated numbers in the same order, or one number for all). Uses each product's agreed price for this customer (final price / discounted / asking). Returns per item: pieces, price_per_piece, line_total, plus total_bundles and order_total. Copy these numbers exactly.",
+        "operation": "executeQuery",
+        "query": "with ids as (\n  select upper(id) as product_id, ord\n  from unnest(regexp_split_to_array(upper(trim($2)), '[^A-Z0-9-]+')) with ordinality as t(id, ord)\n  where id <> ''\n), qty as (\n  select b::int as bundles, ord\n  from unnest(regexp_split_to_array(trim($3), '[^0-9]+')) with ordinality as t(b, ord)\n  where b <> ''\n), req as (\n  select i.product_id, i.ord,\n         coalesce(q.bundles, (select bundles from qty order by ord limit 1), 1) as bundles\n  from ids i left join qty q on q.ord = i.ord\n), priced as (\n  select r.ord, p.product_id, p.product_name, p.bundle_size, r.bundles,\n         case o.stage when 2 then p.lowest_price when 1 then p.asking_price - 10 else p.asking_price end as price_per_piece,\n         case o.stage when 2 then 'final price' when 1 then 'discounted' else 'asking price' end as price_type\n  from req r\n  join public.products p on upper(p.product_id) = r.product_id and p.is_active\n  left join public.wa_price_offers o on o.phone = $1 and o.product_id = p.product_id\n)\nselect product_id, product_name, bundles, bundle_size, bundles * bundle_size as pieces,\n       price_per_piece, price_type, bundles * bundle_size * price_per_piece as line_total,\n       sum(bundles) over () as total_bundles,\n       sum(bundles * bundle_size * price_per_piece) over () as order_total\nfrom priced\norder by ord;",
+        "options": {
+          "queryReplacement": "={{ $('Extract Message').first().json.phone }},{{ String($fromAI('product_ids', 'Space-separated Product IDs, e.g. AM-DJ-005 PD045', 'string')).replace(/,/g, ' ') }},{{ String($fromAI('bundles', 'Space-separated bundle quantities in the same order, or one number for all', 'string')).replace(/,/g, ' ') }}"
+        }
+      },
+      "id": "cc6498ee-daef-436a-8b86-a61027aca1f8",
+      "name": "calculate_order",
+      "type": "n8n-nodes-base.postgresTool",
+      "typeVersion": 2.5,
+      "position": [
+        2500,
+        560
+      ]
+    }
+  ],
+  "connections": {
+    "WhatsApp Verify (GET)": {
+      "main": [
+        [
+          {
+            "node": "Verify Token OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Token OK?": {
+      "main": [
+        [
+          {
+            "node": "Return Challenge",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "WhatsApp Inbound (POST)": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Extract Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Message": {
+      "main": [
+        [
+          {
+            "node": "Dedupe Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedupe Message": {
+      "main": [
+        [
+          {
+            "node": "New Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New Message?": {
+      "main": [
+        [
+          {
+            "node": "Mark Read + Typing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Read + Typing": {
+      "main": [
+        [
+          {
+            "node": "Message Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message Type": {
+      "main": [
+        [
+          {
+            "node": "Text Input",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Media URL",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unsupported Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Media URL": {
+      "main": [
+        [
+          {
+            "node": "Download Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Image": {
+      "main": [
+        [
+          {
+            "node": "Read Product ID (Vision)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Product ID (Vision)": {
+      "main": [
+        [
+          {
+            "node": "Lookup Screenshot Product",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Text Input": {
+      "main": [
+        [
+          {
+            "node": "Denim Sales Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Image Input": {
+      "main": [
+        [
+          {
+            "node": "Denim Sales Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unsupported Input": {
+      "main": [
+        [
+          {
+            "node": "Denim Sales Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Denim Sales Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Memory (Supabase)": {
+      "ai_memory": [
+        [
+          {
+            "node": "Denim Sales Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "get_product": {
+      "ai_tool": [
+        [
+          {
+            "node": "Denim Sales Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_products": {
+      "ai_tool": [
+        [
+          {
+            "node": "Denim Sales Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Denim Sales Agent": {
+      "main": [
+        [
+          {
+            "node": "Parse Agent Output",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fallback Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Agent Output": {
+      "main": [
+        [
+          {
+            "node": "Send WhatsApp Reply",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Lead Update?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Fallback Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send WhatsApp Reply": {
+      "main": [
+        [
+          {
+            "node": "Send Catalog?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Catalog?": {
+      "main": [
+        [
+          {
+            "node": "Catalog Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Catalog Job": {
+      "main": [
+        [
+          {
+            "node": "Run Catalog Sender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Update?": {
+      "main": [
+        [
+          {
+            "node": "Build Airtable Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Airtable Fields": {
+      "main": [
+        [
+          {
+            "node": "Find Lead (Airtable)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Lead (Airtable)": {
+      "main": [
+        [
+          {
+            "node": "Lead Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Exists?": {
+      "main": [
+        [
+          {
+            "node": "Merge Lead Fields",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Lead (Airtable)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Lead Fields": {
+      "main": [
+        [
+          {
+            "node": "Update Lead (Airtable)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "request_discount": {
+      "ai_tool": [
+        [
+          {
+            "node": "Denim Sales Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Screenshot Product": {
+      "main": [
+        [
+          {
+            "node": "Image Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "calculate_order": {
+      "ai_tool": [
+        [
+          {
+            "node": "Denim Sales Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dhaka",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all"
+  },
+  "pinData": {},
+  "active": false,
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
